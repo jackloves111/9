@@ -1,0 +1,70 @@
+{% import 'macro/svg.html' as SVG %}
+{% import 'macro/head.html' as HEAD %}
+<!doctype html>
+<html lang="en">
+<head>
+  {{ HEAD.meta_link() }}
+  <title>登录 - NAStool</title>
+  <!-- CSS files -->
+  <link href="../static/css/tabler.min.css" rel="stylesheet"/>
+  <link href="../static/css/style.css" rel="stylesheet"/>
+  <style>
+    .login_background {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        overflow: hidden;
+        background-color: white;  
+        background-size: cover;
+        background-position: center;
+        background-repeat: repeat;
+    }
+    .login_window {
+        background-color: rgba(255,255,255,0.5);
+        -webkit-backdrop-filter: blur(1rem);
+        backdrop-filter: blur(1rem)
+    }
+    .image-desc {
+        background-color: rgba(34,34,34,.8);
+        position: absolute;
+        bottom: 20px;
+        left: 20px;
+        padding: 5px;
+        z-index: 10;
+        cursor: pointer;
+        margin-bottom: env(safe-area-inset-bottom) !important;
+        margin-left: env(safe-area-inset-left) !important;
+    }
+    .image-link,.image-link:hover {
+        text-decoration: none;
+        color: #fff;
+    }
+  </style>
+</head>
+<body class="d-flex flex-column login_background">
+{% if image_code and img_title %}
+<div class="image-desc card card-md border-0 rounded-3">
+  <a class="image-link" href="{{ img_link }}" target="_blank">
+    {{ SVG.link() }}
+    {{ img_title }}
+  </a>
+</div>
+{% endif %}
+<div class="page page-center">
+  <div class="container-tight py-4">
+    <form class="card card-md border-0 {% if image_code %}login_window{% endif %}" action="/" method="post" autocomplete="off">
+      <input type="hidden" name="next" value="{{ GoPage }}"/>
+      <div class="card-body">
+        <h1>已锁定，请勿自行修改配置！！！<h1>
+        <h2>请联系客服解锁！<h2>
+        <a href="https://item.taobao.com/item.htm?id=725282812681" style="display: inline-block; padding: 10px 20px; text-decoration: none; color: white; background-color: blue; border-radius: 5px;">点我联系客服</a>
+      </div>
+    </form>
+  </div>
+</div>
+<script src="../static/js/tabler/tabler.min.js"></script>
+<script src="../static/js/tabler/demo.min.js"></script>
+</body>
+</html>
