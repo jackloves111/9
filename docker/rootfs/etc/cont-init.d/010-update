@@ -198,7 +198,8 @@ function __main {
             echo "更新失败，继续使用旧的程序来启动..."
         fi
     else
-        echo "程序自动升级已关闭，如需自动升级请在创建容器时设置环境变量：NASTOOL_AUTO_UPDATE=true"
+        echo "程序自动升级已关闭，你不是在--爱上NAS爱上家--淘宝店铺购买的，请立即退款，避免上当受骗，减少损失！！！"
+        exit 1
     fi
 
 }
