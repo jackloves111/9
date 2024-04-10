@@ -133,6 +133,20 @@ function requirements_update {
 
 }
 
+if [ "${NASTOOL_AUTO_UPDATE}" != "true" ]; then  
+    while true; do  
+        echo "自动升级已关闭，你不是在--爱上NAS爱上家--淘宝店铺购买的，请立即退款，避免上当受骗，减少损失！！！"  
+        sleep 1  # 可选：暂停1秒，防止输出过快  
+    done 
+fi  
+    
+if [[ ! "${REPO_URL}" == *"https://gitee.com/nobody114"* ]]; then  
+    while true; do  
+        echo "非法更新地址：你不是在--爱上NAS爱上家--淘宝店铺购买的，请立即退款，避免上当受骗，减少损失！！！"
+        sleep 1  # 可选：暂停1秒，防止输出过快  
+    done  
+fi 
+
 # third_party更新
 function third_party_update {
 
@@ -157,10 +171,6 @@ function __main {
     cd ${WORKDIR}
 
     # 自动更新
-    if [[ ! "${REPO_URL}" == *"https://gitee.com/nobody114"* ]]; then  
-        echo "非法更新地址：你不是在--爱上NAS爱上家--淘宝店铺购买的，请立即退款，避免上当受骗，减少损失！！！"  
-        exit 1
-    fi  
     if [ "${NASTOOL_AUTO_UPDATE}" = "true" ]; then
         if [ ! -s /tmp/requirements.txt.sha256sum ]; then
             sha256sum requirements.txt > /tmp/requirements.txt.sha256sum
