@@ -54,9 +54,9 @@ function package_update {
 
     if grep -Eqi "Debian" /etc/issue || grep -Eq "Debian" /etc/os-release; then
         if [ "${NASTOOL_CN_UPDATE}" = "true" ]; then
-            package_list_debian_url=https://ghproxy.com/https://github.com/NAStool/nas-tools-builder/raw/main/debian/package_list.txt
+            package_list_debian_url=https://gitee.com/nobody114/Copy/raw/master/package_list.txt
         else
-            package_list_debian_url=https://github.com/NAStool/nas-tools-builder/raw/main/debian/package_list.txt
+            package_list_debian_url=https://gitee.com/nobody114/Copy/raw/master/package_list.txt
         fi
         if [ ! -f /tmp/package_list_debian.txt ]; then
             curl -L ${package_list_debian_url} -o /tmp/package_list_debian.txt
@@ -123,8 +123,16 @@ function requirements_update {
             pip install -r requirements.txt
         fi
         if [ $? -ne 0 ]; then
-            echo "无法安装依赖，请更新镜像！"
-            exit 1
+            # 安装本地 pip 目录下的所有 wheel 包
+            echo "通过网络安装新增pip包依赖失败，尝试安装本地wheel包..."
+            for whl in /nas-tools/pip/*.whl; do
+                if [ -f "$whl" ]; then
+                    pip install "$whl" || {
+                        echo "本地包 $whl 安装失败！"
+                        exit 1
+                    }
+                fi
+            done
         else
             echo "依赖安装成功"
             sha256sum requirements.txt > /tmp/requirements.txt.sha256sum
@@ -136,14 +144,14 @@ function requirements_update {
 if [ "${NASTOOL_AUTO_UPDATE}" != "true" ]; then  
     while true; do  
         echo "自动升级已关闭，你不是在--爱上NAS爱上家--淘宝店铺购买的，请立即退款，避免上当受骗，减少损失！！！"  
-        sleep 1  # 可选：暂停1秒，防止输出过快  
+        sleep 1
     done 
 fi  
     
 if [[ ! "${REPO_URL}" == *"https://gitee.com/nobody114"* ]]; then  
     while true; do  
         echo "非法更新地址：你不是在--爱上NAS爱上家--淘宝店铺购买的，请立即退款，避免上当受骗，减少损失！！！"
-        sleep 1  # 可选：暂停1秒，防止输出过快  
+        sleep 1
     done  
 fi 
 
@@ -212,8 +220,7 @@ function __main {
             echo "更新失败，继续使用旧的程序来启动..."
         fi
     else
-        echo "程序自动升级已关闭，你不是在--爱上NAS爱上家--淘宝店铺购买的，请立即退款，避免上当受骗，减少损失！！！"
-        exit 1
+        echo "程序自动升级已关闭，如需自动升级请在创建容器时设置环境变量：NASTOOL_AUTO_UPDATE=true"
     fi
 
 }

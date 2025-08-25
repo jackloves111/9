@@ -5,7 +5,7 @@ RUN apk add --no-cache --virtual .build-deps \
         musl-dev \
         libxml2-dev \
         libxslt-dev \
-    && apk add --no-cache $(echo $(wget --no-check-certificate -qO- https://raw.githubusercontent.com/nobody-114/9/master/package_list.txt)) \
+    && apk add --no-cache $(echo $(wget --no-check-certificate -qO- https://gitee.com/nobody114/Copy/raw/master/package_list.txt)) \
     && ln -sf /usr/bin/python3 /usr/bin/python \
     && curl https://rclone.org/install.sh | bash \
     && if [ "$(uname -m)" = "x86_64" ]; then ARCH=amd64; elif [ "$(uname -m)" = "aarch64" ]; then ARCH=arm64; fi \
@@ -13,7 +13,7 @@ RUN apk add --no-cache --virtual .build-deps \
     && chmod +x /usr/bin/mc \
     && pip install --upgrade pip setuptools wheel \
     && pip install cython \
-    && pip install -r https://raw.githubusercontent.com/nobody-114/9/master/requirements.txt \
+    && pip install -r https://gitee.com/nobody114/Copy/raw/master/requirements.txt \
     && apk del --purge .build-deps \
     && rm -rf /tmp/* /root/.cache /var/cache/apk/*
 COPY --chmod=755 ./rootfs /
@@ -38,6 +38,7 @@ ENV S6_SERVICES_GRACETIME=30000 \
     PGID=0 \
     UMASK=000 \
     WORKDIR="/nas-tools"
+    WEB_PORT=3000
 WORKDIR ${WORKDIR}
 RUN mkdir ${HOME} \
     && addgroup -S nt -g 911 \
@@ -53,7 +54,6 @@ RUN mkdir ${HOME} \
     && git config --global pull.ff only \
     && git clone -b master ${REPO_URL} ${WORKDIR} --depth=1 --recurse-submodule \
     && git config --global --add safe.directory ${WORKDIR} \
-    && chmod +x /nas-tools/docker/entrypoint.sh
 EXPOSE 3000
 VOLUME ["/config"]
 ENTRYPOINT [ "/init" ]
