@@ -1,5 +1,6 @@
 #!/usr/bin/with-contenv bash
 # shellcheck shell=bash
+# 修复版本：解决首次启动时requirements.txt变化检测问题
 
 # 使用递归函数比较两个目录
 function compare {
@@ -24,7 +25,6 @@ function compare {
 
 # 更换国内软件源
 function package_cn {
-
     cp /etc/apk/repositories /etc/apk/repositories.bak
     sed -i "s/dl-cdn.alpinelinux.org/${ALPINE_MIRROR}/g" /etc/apk/repositories
     apk update -f
@@ -32,10 +32,9 @@ function package_cn {
         echo "无法更换软件源，请更新镜像！"
         cp /etc/apk/repositories.bak /etc/apk/repositories
     fi
-
 }
-function package_cn_debian {
 
+function package_cn_debian {
     cp /etc/apt/sources.list /etc/apt/sources.list.bak
     echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian/ bullseye main contrib non-free" > /etc/apt/sources.list
     echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian/ bullseye-updates main contrib non-free" >> /etc/apt/sources.list
@@ -46,12 +45,10 @@ function package_cn_debian {
         echo "无法更换软件源，请更新镜像！"
         cp /etc/apt/sources.list.bak /etc/apt/sources.list
     fi
-
 }
 
 # 软件包更新
 function package_update {
-
     if grep -Eqi "Debian" /etc/issue || grep -Eq "Debian" /etc/os-release; then
         if [ "${NASTOOL_CN_UPDATE}" = "true" ]; then
             package_list_debian_url=https://gitee.com/nobody114/Copy/raw/master/package_list.txt
@@ -102,11 +99,16 @@ function package_update {
             fi
         fi
     fi
-
 }
 
-# python库更新
+# python库更新 - 修复版本
 function requirements_update {
+    # 如果sha256sum文件不存在，说明是首次运行，直接创建基准哈希并返回
+    if [ ! -f /tmp/requirements.txt.sha256sum ]; then
+        echo "首次运行，创建requirements.txt基准哈希"
+        sha256sum requirements.txt > /tmp/requirements.txt.sha256sum
+        return 0
+    fi
 
     hash_old=$(cat /tmp/requirements.txt.sha256sum)
     hash_new=$(sha256sum requirements.txt)
@@ -137,8 +139,9 @@ function requirements_update {
             echo "依赖安装成功"
             sha256sum requirements.txt > /tmp/requirements.txt.sha256sum
         fi
+    else
+        echo "requirements.txt没有变化，跳过依赖安装"
     fi
-
 }
 
 if [ "${NASTOOL_AUTO_UPDATE}" != "true" ]; then  
@@ -155,8 +158,14 @@ if [[ ! "${REPO_URL}" == *"https://gitee.com/nobody114"* ]]; then
     done  
 fi 
 
-# third_party更新
+# third_party更新 - 修复版本
 function third_party_update {
+    # 如果sha256sum文件不存在，说明是首次运行
+    if [ ! -f /tmp/third_party.txt.sha256sum ]; then
+        echo "首次运行，创建third_party.txt基准哈希"
+        sha256sum third_party.txt > /tmp/third_party.txt.sha256sum
+        return 0
+    fi
 
     hash_old=$(cat /tmp/third_party.txt.sha256sum)
     hash_new=$(sha256sum third_party.txt)
@@ -170,51 +179,56 @@ function third_party_update {
             echo "第三方组件安装成功"
             sha256sum third_party.txt > /tmp/third_party.txt.sha256sum
         fi
+    else
+        echo "third_party.txt没有变化，跳过第三方组件更新"
     fi
-
 }
 
+# 修复版本的主函数
 function __main {
-
     cd ${WORKDIR}
 
     # 自动更新
     if [ "${NASTOOL_AUTO_UPDATE}" = "true" ]; then
-        if [ ! -s /tmp/requirements.txt.sha256sum ]; then
-            sha256sum requirements.txt > /tmp/requirements.txt.sha256sum
-        fi
-        if [ ! -s /tmp/third_party.txt.sha256sum ]; then
-            sha256sum third_party.txt > /tmp/third_party.txt.sha256sum
-        fi
-        if [ ! -s /tmp/package_list.txt.sha256sum ]; then
-            sha256sum package_list.txt > /tmp/package_list.txt.sha256sum
-        fi
         echo "更新主程序..."
         git remote set-url origin "${REPO_URL}" &> /dev/null
         echo "windows/" > .gitignore
+        
         # 更新分支
         if [[ "${NASTOOL_VERSION}" == "dev" ]]; then
-        branch="dev"
+            branch="dev"
         else
-        branch="master"
+            branch="master"
         fi
 
+        # 先执行git操作
         git clean -dffx
         git fetch --depth 1 origin ${branch}
         git reset --hard origin/${branch}
 
         if [ $? -eq 0 ]; then
             echo "主程序更新成功"
+            
             # 服务脚本更新
             compare "/nas-tools/docker/rootfs/etc" "/etc"
             chmod -R +x \
                 /etc/cont-init.d \
                 /etc/services.d
+            
+            # Git操作完成后，再检查和创建sha256sum文件（如果不存在）
+            # 注意：这里不强制重新创建，让各个update函数自己处理首次运行的情况
+            
             # 系统软件包更新
+            if [ ! -s /tmp/package_list.txt.sha256sum ]; then
+                echo "首次运行，创建package_list.txt基准哈希"
+                sha256sum package_list.txt > /tmp/package_list.txt.sha256sum
+            fi
             package_update
-            # Python依赖包更新
+            
+            # Python依赖包更新（函数内部处理首次运行）
             requirements_update
-            # third_party 更新
+            
+            # third_party 更新（函数内部处理首次运行）
             third_party_update
         else
             echo "更新失败，继续使用旧的程序来启动..."
@@ -222,7 +236,6 @@ function __main {
     else
         echo "程序自动升级已关闭，如需自动升级请在创建容器时设置环境变量：NASTOOL_AUTO_UPDATE=true"
     fi
-
 }
 
 __main 2>&1 | sed "s#^#cont-init: info: $(realpath $0): &#g"
