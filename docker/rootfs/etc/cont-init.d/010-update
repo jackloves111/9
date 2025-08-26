@@ -23,8 +23,64 @@ function compare {
     done
 }
 
+# 智能多源切换函数
+function try_mirrors_with_fallback {
+    local mirror_type="$1"
+    local timeout=10
+    
+    if [ "$mirror_type" = "alpine" ]; then
+        local mirrors=(
+            "mirrors.aliyun.com"
+            "mirrors.tuna.tsinghua.edu.cn"
+            "mirrors.ustc.edu.cn"
+            "mirror.lzu.edu.cn"
+        )
+        
+        for mirror in "${mirrors[@]}"; do
+            echo "尝试Alpine镜像源: $mirror"
+            if timeout $timeout wget --spider --quiet "https://$mirror/alpine/" 2>/dev/null; then
+                echo "Alpine镜像源 $mirror 连接成功"
+                export ALPINE_MIRROR="$mirror"
+                return 0
+            else
+                echo "Alpine镜像源 $mirror 连接失败或超时"
+            fi
+        done
+        
+        echo "所有Alpine镜像源都无法连接，使用默认源"
+        export ALPINE_MIRROR="dl-cdn.alpinelinux.org"
+        return 1
+        
+    elif [ "$mirror_type" = "pypi" ]; then
+        local mirrors=(
+            "https://mirrors.aliyun.com/pypi/simple/"
+            "https://pypi.mirrors.ustc.edu.cn/simple/"
+            "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple/"
+            "https://mirror.baidu.com/pypi/simple/"
+        )
+        
+        for mirror in "${mirrors[@]}"; do
+            echo "尝试PyPI镜像源: $mirror"
+            if timeout $timeout wget --spider --quiet "$mirror" 2>/dev/null; then
+                echo "PyPI镜像源 $mirror 连接成功"
+                export PYPI_MIRROR="$mirror"
+                return 0
+            else
+                echo "PyPI镜像源 $mirror 连接失败或超时"
+            fi
+        done
+        
+        echo "所有PyPI镜像源都无法连接，使用默认源"
+        export PYPI_MIRROR="https://pypi.org/simple/"
+        return 1
+    fi
+}
+
 # 更换国内软件源
 function package_cn {
+    # 智能选择最佳Alpine镜像源
+    try_mirrors_with_fallback "alpine"
+    
     cp /etc/apk/repositories /etc/apk/repositories.bak
     sed -i "s/dl-cdn.alpinelinux.org/${ALPINE_MIRROR}/g" /etc/apk/repositories
     apk update -f
@@ -34,69 +90,23 @@ function package_cn {
     fi
 }
 
-function package_cn_debian {
-    cp /etc/apt/sources.list /etc/apt/sources.list.bak
-    echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian/ bullseye main contrib non-free" > /etc/apt/sources.list
-    echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian/ bullseye-updates main contrib non-free" >> /etc/apt/sources.list
-    echo "deb https://mirrors.tuna.tsinghua.edu.cn/debian/ bullseye-backports main contrib non-free" >> /etc/apt/sources.list
-    echo "deb https://security.debian.org/debian-security bullseye-security main contrib non-free" >> /etc/apt/sources.list
-    apt-get update -y
-    if [ $? -ne 0 ]; then
-        echo "无法更换软件源，请更新镜像！"
-        cp /etc/apt/sources.list.bak /etc/apt/sources.list
-    fi
-}
 
-# 软件包更新
+
+# 软件包更新 - Alpine Linux
 function package_update {
-    if grep -Eqi "Debian" /etc/issue || grep -Eq "Debian" /etc/os-release; then
+    hash_old=$(cat /tmp/package_list.txt.sha256sum)
+    hash_new=$(sha256sum package_list.txt)
+    if [ "${hash_old}" != "${hash_new}" ]; then
+        echo "检测到package_list.txt有变化，更新软件包..."
         if [ "${NASTOOL_CN_UPDATE}" = "true" ]; then
-            package_list_debian_url=https://gitee.com/nobody114/Copy/raw/master/package_list.txt
+            package_cn
+        fi
+        apk add --no-cache $(echo $(cat package_list.txt))
+        if [ $? -ne 0 ]; then
+            echo "无法更新软件包，请更新镜像！"
         else
-            package_list_debian_url=https://gitee.com/nobody114/Copy/raw/master/package_list.txt
-        fi
-        if [ ! -f /tmp/package_list_debian.txt ]; then
-            curl -L ${package_list_debian_url} -o /tmp/package_list_debian.txt
-        else
-            rm -rf /tmp/package_list_debian.txt
-            curl -L ${package_list_debian_url} -o /tmp/package_list_debian.txt
-        fi
-        if [ ! -s /tmp/package_list_debian.txt.sha256sum ]; then
-            sha256sum /tmp/package_list_debian.txt > /tmp/package_list_debian.txt.sha256sum
-        fi
-        hash_old=$(cat /tmp/package_list_debian.txt.sha256sum)
-        hash_new=$(sha256sum /tmp/package_list_debian.txt)
-        if [ "${hash_old}" != "${hash_new}" ]; then
-            DEBIAN_FRONTEND="noninteractive"
-            echo "检测到package_list.txt有变化，更新软件包..."
-            if [ "${NASTOOL_CN_UPDATE}" = "true" ]; then
-                package_cn_debian
-            else
-                apt-get update -y
-            fi
-            apt-get install -y $(echo $(cat /tmp/package_list_debian.txt))
-            if [ $? -ne 0 ]; then
-                echo "无法更新软件包，请更新镜像！"
-            else
-                echo "软件包安装成功"
-                sha256sum /tmp/package_list_debian.txt > /tmp/package_list.txt.sha256sum
-            fi
-        fi
-    else
-        hash_old=$(cat /tmp/package_list.txt.sha256sum)
-        hash_new=$(sha256sum package_list.txt)
-        if [ "${hash_old}" != "${hash_new}" ]; then
-            echo "检测到package_list.txt有变化，更新软件包..."
-            if [ "${NASTOOL_CN_UPDATE}" = "true" ]; then
-                package_cn
-            fi
-            apk add --no-cache $(echo $(cat package_list.txt))
-            if [ $? -ne 0 ]; then
-                echo "无法更新软件包，请更新镜像！"
-            else
-                echo "软件包安装成功"
-                sha256sum package_list.txt > /tmp/package_list.txt.sha256sum
-            fi
+            echo "软件包安装成功"
+            sha256sum package_list.txt > /tmp/package_list.txt.sha256sum
         fi
     fi
 }
@@ -116,6 +126,8 @@ function requirements_update {
         echo "检测到requirements.txt有变化，重新安装依赖..."
         if [ "${NASTOOL_CN_UPDATE}" = "true" ]; then
             package_cn
+            # 智能选择最佳PyPI镜像源
+            try_mirrors_with_fallback "pypi"
             apk add --no-cache libffi-dev gcc musl-dev libxml2-dev libxslt-dev
             pip install --upgrade pip setuptools wheel -i "${PYPI_MIRROR}"
             pip install -r requirements.txt -i "${PYPI_MIRROR}"
