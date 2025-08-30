@@ -31,9 +31,9 @@ function try_mirrors_with_fallback {
     if [ "$mirror_type" = "alpine" ]; then
         local mirrors=(
             "mirrors.aliyun.com"
-            "mirrors.tuna.tsinghua.edu.cn"
             "mirrors.ustc.edu.cn"
             "mirror.lzu.edu.cn"
+            "mirrors.tuna.tsinghua.edu.cn"
         )
         
         for mirror in "${mirrors[@]}"; do
@@ -54,9 +54,9 @@ function try_mirrors_with_fallback {
     elif [ "$mirror_type" = "pypi" ]; then
         local mirrors=(
             "https://mirrors.aliyun.com/pypi/simple/"
+            "https://mirror.baidu.com/pypi/simple/"
             "https://pypi.mirrors.ustc.edu.cn/simple/"
             "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple/"
-            "https://mirror.baidu.com/pypi/simple/"
         )
         
         for mirror in "${mirrors[@]}"; do
@@ -78,11 +78,18 @@ function try_mirrors_with_fallback {
 
 # 更换国内软件源
 function package_cn {
-    # 智能选择最佳Alpine镜像源
+    # 忽略环境变量，重新智能选择最佳Alpine镜像源
+    unset ALPINE_MIRROR
     try_mirrors_with_fallback "alpine"
     
+    # 备份原始文件
     cp /etc/apk/repositories /etc/apk/repositories.bak
-    sed -i "s/dl-cdn.alpinelinux.org/${ALPINE_MIRROR}/g" /etc/apk/repositories
+    
+    # 如果动态检测成功，使用检测到的镜像源替换官方源
+    if [ -n "${ALPINE_MIRROR}" ]; then
+        sed -i "s/dl-cdn.alpinelinux.org/${ALPINE_MIRROR}/g" /etc/apk/repositories
+    fi
+    # 如果动态检测失败，直接使用原始文件（已经是官方源）
     apk update -f
     if [ $? -ne 0 ]; then
         echo "无法更换软件源，请更新镜像！"
@@ -126,7 +133,8 @@ function requirements_update {
         echo "检测到requirements.txt有变化，重新安装依赖..."
         if [ "${NASTOOL_CN_UPDATE}" = "true" ]; then
             package_cn
-            # 智能选择最佳PyPI镜像源
+            # 忽略环境变量，重新智能选择最佳PyPI镜像源
+            unset PYPI_MIRROR
             try_mirrors_with_fallback "pypi"
             apk add --no-cache libffi-dev gcc musl-dev libxml2-dev libxslt-dev
             pip install --upgrade pip setuptools wheel -i "${PYPI_MIRROR}"
