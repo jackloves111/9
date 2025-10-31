@@ -48,11 +48,11 @@ jobs:
           python-version: '3.10.10'
 
       -
-        name: 使用阿里云 PyPI 镜像
+        name: 使用官方 PyPI 镜像
         run: |
-          sed -i 's|pip install --upgrade pip setuptools wheel|pip install -i https://mirrors.aliyun.com/pypi/simple/ --upgrade pip setuptools wheel|g' docker/Dockerfile
-          sed -i 's|pip install cython|pip install -i https://mirrors.aliyun.com/pypi/simple/ cython|g' docker/Dockerfile
-          sed -i 's|pip install -r https://raw.githubusercontent.com/jackloves111/9/refs/heads/master/requirements.txt|pip install -i https://mirrors.aliyun.com/pypi/simple/ -r https://raw.githubusercontent.com/jackloves111/9/refs/heads/master/requirements.txt|g' docker/Dockerfile
+          sed -i 's|pip install --upgrade pip setuptools wheel|pip install -i https://pypi.org/simple --upgrade pip setuptools wheel|g' docker/Dockerfile
+          sed -i 's|pip install cython|pip install -i https://pypi.org/simple cython|g' docker/Dockerfile
+          sed -i 's|pip install -r https://raw.githubusercontent.com/jackloves111/9/refs/heads/master/requirements.txt|pip install -i https://pypi.org/simple -r https://raw.githubusercontent.com/jackloves111/9/refs/heads/master/requirements.txt|g' docker/Dockerfile
 
       - 
         name: Build Image
