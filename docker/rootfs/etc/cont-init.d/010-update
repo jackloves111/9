@@ -56,6 +56,7 @@ function try_mirrors_with_fallback {
         
     elif [ "$mirror_type" = "pypi" ]; then
         local mirrors=(
+            "https://pip.nastool.work/simple/"
             "https://mirrors.aliyun.com/pypi/simple/"
             "https://mirrors.cloud.tencent.com/pypi/simple/"
             "https://mirrors.163.com/pypi/simple/"
@@ -64,7 +65,9 @@ function try_mirrors_with_fallback {
         
         for mirror in "${mirrors[@]}"; do
             echo "尝试PyPI镜像源: $mirror"
-            if timeout $timeout wget --spider --quiet "$mirror" 2>/dev/null; then
+            # 提取主机名用于trusted-host参数
+            host=$(echo "$mirror" | sed 's|https\?://||' | sed 's|/.*||')
+            if timeout 10 pip index versions --index-url "$mirror" --trusted-host "$host" requests > /dev/null 2>&1; then
                 echo "PyPI镜像源 $mirror 连接成功"
                 export PYPI_MIRROR="$mirror"
                 return 0
@@ -97,7 +100,7 @@ function package_cn {
         sed -i "s/dl-cdn.alpinelinux.org/${ALPINE_MIRROR}/g" /etc/apk/repositories
     fi
     # 如果动态检测失败，直接使用原始文件（已经是官方源）
-    apk update -f
+    apk update -f >/dev/null 2>&1
     if [ $? -ne 0 ]; then
         echo "无法更换软件源，请更新镜像！"
         cp /etc/apk/repositories.bak /etc/apk/repositories
@@ -115,7 +118,7 @@ function package_update {
         if [ "${NASTOOL_CN_UPDATE}" = "true" ]; then
             package_cn
         fi
-        apk add --no-cache $(echo $(cat package_list.txt))
+        apk add --no-cache $(echo $(cat package_list.txt)) >/dev/null 2>&1
         if [ $? -ne 0 ]; then
             echo "无法更新软件包，请更新镜像！"
             echo "软件包更新失败，保持原有sha256sum以便下次重试"
@@ -132,7 +135,7 @@ function requirements_update {
     hash_old=$(cat /tmp/requirements.txt.sha256sum)
     hash_new=$(sha256sum requirements.txt)
     if [ "${hash_old}" != "${hash_new}" ]; then
-        echo "检测到requirements.txt有变化，重新安装依赖..."
+        echo "检测到requirements.txt有变化，重新安装依赖（安装需要联网，可能需要5-30分钟），请耐心等待..."
         install_success=false
         if [ "${NASTOOL_CN_UPDATE}" = "true" ]; then
             # 先测试PyPI镜像源，避免重复测试Alpine源
@@ -140,37 +143,20 @@ function requirements_update {
             try_mirrors_with_fallback "pypi"
             # 然后测试Alpine镜像源并更新软件包源
             package_cn
-            apk add --no-cache libffi-dev gcc musl-dev libxml2-dev libxslt-dev
-            pip install --upgrade pip setuptools wheel -i "${PYPI_MIRROR}"
-            pip install -r requirements.txt -i "${PYPI_MIRROR}"
+            apk add --no-cache libffi-dev gcc musl-dev libxml2-dev libxslt-dev >/dev/null 2>&1
+            pip install --upgrade pip setuptools wheel -i "${PYPI_MIRROR}" -q
+            pip install -r requirements.txt -i "${PYPI_MIRROR}" -q
         else
-            apk add --no-cache libffi-dev gcc musl-dev libxml2-dev libxslt-dev
-            pip install --upgrade pip setuptools wheel
-            pip install -r requirements.txt
+            apk add --no-cache libffi-dev gcc musl-dev libxml2-dev libxslt-dev >/dev/null 2>&1
+            pip install --upgrade pip setuptools wheel -q
+            pip install -r requirements.txt -q
         fi
         if [ $? -ne 0 ]; then
-            # 安装本地 pip 目录下的所有 wheel 包
-            echo "通过网络安装新增pip包依赖失败，尝试安装本地wheel包..."
-            local_install_success=true
-            for whl in /nas-tools/pip/*.whl; do
-                if [ -f "$whl" ]; then
-                    pip install "$whl" || {
-                        echo "本地包 $whl 安装失败！"
-                        local_install_success=false
-                        break
-                    }
-                fi
-            done
-            if [ "$local_install_success" = "true" ]; then
-                install_success=true
-                echo "本地wheel包安装成功"
-            else
-                echo "本地wheel包安装失败！"
-                exit 1
-            fi
+            echo "依赖安装失败！请检查网络环境，是否能正常访问PyPI镜像源。"
+            exit 1
         else
             install_success=true
-            echo "依赖安装成功"
+            echo "===========依赖安装成功==========="
         fi
         
         # 只有在安装成功时才更新sha256sum
@@ -202,7 +188,8 @@ function third_party_update {
     hash_new=$(sha256sum third_party.txt)
     if [ "${hash_old}" != "${hash_new}" ]; then
         echo "检测到third_party.txt有变化，更新第三方组件..."
-        git submodule update --init --recursive
+        rm -f .git/*.lock .git/refs/heads/*.lock 2>/dev/null
+        git submodule update --init --recursive >/dev/null 2>&1
         if [ $? -ne 0 ]; then
             echo "无法更新第三方组件，请更新镜像！"
             echo "第三方组件更新失败，保持原有sha256sum以便下次重试"
@@ -223,7 +210,8 @@ function __main {
 
     # 自动更新
     if [ "${NASTOOL_AUTO_UPDATE}" = "true" ]; then
-        echo "更新主程序..."
+        echo "更新主程序（安装需要联网，可能需要5-30分钟），请耐心等待..."
+        echo "长时间更新不了是网络问题，尝试重启光猫、重启路由器、重启设备，更换宽带"
         git remote set-url origin "${REPO_URL}" &> /dev/null
         echo "windows/" > .gitignore
         
@@ -250,10 +238,11 @@ function __main {
             sha256sum third_party.txt > /tmp/third_party.txt.sha256sum
         fi
 
-        # 执行git操作
-        git clean -dffx
-        git fetch --depth 1 origin ${branch}
-        git reset --hard origin/${branch}
+        # 执行git操作（清理锁文件后）
+        rm -f .git/*.lock .git/refs/heads/*.lock 2>/dev/null
+        git clean -dffx >/dev/null 2>&1
+        git fetch --depth 1 origin ${branch} >/dev/null 2>&1
+        git reset --hard origin/${branch} >/dev/null 2>&1
 
         if [ $? -eq 0 ]; then
             echo "主程序更新成功"
