@@ -100,7 +100,7 @@ function package_cn {
         sed -i "s/dl-cdn.alpinelinux.org/${ALPINE_MIRROR}/g" /etc/apk/repositories
     fi
     # 如果动态检测失败，直接使用原始文件（已经是官方源）
-    apk update -f >/dev/null 2>&1
+    apk update -f 
     if [ $? -ne 0 ]; then
         echo "无法更换软件源，请更新镜像！"
         cp /etc/apk/repositories.bak /etc/apk/repositories
@@ -118,7 +118,7 @@ function package_update {
         if [ "${NASTOOL_CN_UPDATE}" = "true" ]; then
             package_cn
         fi
-        apk add --no-cache $(echo $(cat package_list.txt)) >/dev/null 2>&1
+        apk add --no-cache $(echo $(cat package_list.txt)) 
         if [ $? -ne 0 ]; then
             echo "无法更新软件包，请更新镜像！"
             echo "软件包更新失败，保持原有sha256sum以便下次重试"
@@ -141,19 +141,14 @@ function requirements_update {
             # 先测试PyPI镜像源，避免重复测试Alpine源
             unset PYPI_MIRROR
             try_mirrors_with_fallback "pypi"
-            # 然后测试Alpine镜像源并更新软件包源
-            package_cn
-            apk add --no-cache libffi-dev gcc musl-dev libxml2-dev libxslt-dev >/dev/null 2>&1
             pip install --upgrade pip setuptools wheel -i "${PYPI_MIRROR}" -q
             pip install -r requirements.txt -i "${PYPI_MIRROR}" -q
         else
-            apk add --no-cache libffi-dev gcc musl-dev libxml2-dev libxslt-dev >/dev/null 2>&1
             pip install --upgrade pip setuptools wheel -q
             pip install -r requirements.txt -q
         fi
         if [ $? -ne 0 ]; then
-            echo "依赖安装失败！请检查网络环境，是否能正常访问PyPI镜像源。"
-            exit 1
+            echo "依赖安装失败！未进行通用系统包更新，可能因缺少系统包或网络问题导致。请手动检查系统包或网络环境后重试。"
         else
             install_success=true
             echo "===========依赖安装成功==========="
@@ -189,7 +184,7 @@ function third_party_update {
     if [ "${hash_old}" != "${hash_new}" ]; then
         echo "检测到third_party.txt有变化，更新第三方组件..."
         rm -f .git/*.lock .git/refs/heads/*.lock 2>/dev/null
-        git submodule update --init --recursive >/dev/null 2>&1
+        git submodule update --init --recursive
         if [ $? -ne 0 ]; then
             echo "无法更新第三方组件，请更新镜像！"
             echo "第三方组件更新失败，保持原有sha256sum以便下次重试"
@@ -240,9 +235,9 @@ function __main {
 
         # 执行git操作（清理锁文件后）
         rm -f .git/*.lock .git/refs/heads/*.lock 2>/dev/null
-        git clean -dffx >/dev/null 2>&1
-        git fetch --depth 1 origin ${branch} >/dev/null 2>&1
-        git reset --hard origin/${branch} >/dev/null 2>&1
+        git clean -dffx
+        git fetch --depth 1 origin ${branch}
+        git reset --hard origin/${branch}
 
         if [ $? -eq 0 ]; then
             echo "主程序更新成功"
