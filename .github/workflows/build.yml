@@ -65,5 +65,5 @@ jobs:
             linux/arm64
           push: true
           tags: |
-            ${{ secrets.DOCKER_USERNAME }}/nas-tools:latest
-            ${{ secrets.DOCKER_USERNAME }}/nas-tools:${{ env.app_version }}
+            ${{ secrets.DOCKER_USERNAME }}/the-movies-tool:latest
+            ${{ secrets.DOCKER_USERNAME }}/the-movies-tool:${{ env.app_version }}
