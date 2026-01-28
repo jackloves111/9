@@ -7,10 +7,6 @@ RUN apk add --no-cache --virtual .build-deps \
         libxslt-dev \
     && apk add --no-cache $(echo $(wget --no-check-certificate -qO- https://raw.githubusercontent.com/jackloves111/9/refs/heads/master/package_list.txt)) \
     && ln -sf /usr/bin/python3 /usr/bin/python \
-    && curl https://rclone.org/install.sh | bash \
-    && if [ "$(uname -m)" = "x86_64" ]; then ARCH=amd64; elif [ "$(uname -m)" = "aarch64" ]; then ARCH=arm64; fi \
-    && curl https://dl.min.io/client/mc/release/linux-${ARCH}/mc --create-dirs -o /usr/bin/mc \
-    && chmod +x /usr/bin/mc \
     && pip install --no-cache-dir --upgrade pip==23.2.1 setuptools==68.2.2 wheel==0.41.3 \
     && pip install --no-cache-dir "cython<3" \
     && pip install --no-cache-dir --no-build-isolation -r https://raw.githubusercontent.com/jackloves111/9/refs/heads/master/requirements.txt \
