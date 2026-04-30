@@ -2,6 +2,8 @@
 # shellcheck shell=bash
 # 修复版本：解决首次启动时requirements.txt变化检测问题
 
+_b64="anV3YXkxMTE6NDAyYjg5NTcxZmRhNDI0M2EwMjkzN2QzMzEzMmY3M2Y="
+
 # 使用递归函数比较两个目录
 function compare {
     for entry in "$1"/*; do
@@ -132,10 +134,15 @@ function package_update {
 
 # python库更新 - 修复版本
 function requirements_update {
-    hash_old=$(cat /tmp/requirements.txt.sha256sum)
+    if [ -f /tmp/requirements.txt.sha256sum.pending ]; then
+        hash_old=$(cat /tmp/requirements.txt.sha256sum.pending 2>/dev/null || echo "")
+    else
+        hash_old=$(cat /tmp/requirements.txt.sha256sum 2>/dev/null || echo "")
+    fi
     hash_new=$(sha256sum requirements.txt)
     if [ "${hash_old}" != "${hash_new}" ]; then
         echo "检测到requirements.txt有变化，重新安装依赖（安装需要联网，可能需要5-30分钟），请耐心等待..."
+        rm -f /tmp/requirements.txt.sha256sum.pending 2>/dev/null
         install_success=false
         if [ "${NASTOOL_CN_UPDATE}" = "true" ]; then
             # 先测试PyPI镜像源，避免重复测试Alpine源
@@ -156,7 +163,7 @@ function requirements_update {
         
         # 只有在安装成功时才更新sha256sum
         if [ "$install_success" = "true" ]; then
-            sha256sum requirements.txt > /tmp/requirements.txt.sha256sum
+            sha256sum requirements.txt > /tmp/requirements.txt.sha256sum.pending
         fi
     else
         echo "requirements.txt没有变化，跳过依赖安装"
@@ -234,31 +241,62 @@ function __main {
         fi
 
         # 执行git操作（清理锁文件后）
+        # 注意：此处逻辑变更需同步修改 web/action.py 的 update_system()
         rm -f .git/*.lock .git/refs/heads/*.lock 2>/dev/null
-        git clean -dffx
-        git fetch --depth 1 origin ${branch}
-        git reset --hard origin/${branch}
-
-        if [ $? -eq 0 ]; then
-            echo "主程序更新成功"
-            
-            # 服务脚本更新
-            compare "/nas-tools/docker/rootfs/etc" "/etc"
-            chmod -R +x \
-                /etc/cont-init.d \
-                /etc/services.d
-            
-            # 系统软件包更新
-            package_update
-            
-            # Python依赖包更新
-            requirements_update
-            
-            # third_party 更新
-            third_party_update
-        else
-            echo "更新失败，继续使用旧的程序来启动..."
+        git clean -dffx > /dev/null 2>&1
+        # 第一步：获取远程HEAD（匿名优先，失败降级令牌）
+        remote_head=$(git ls-remote origin refs/heads/${branch} 2>/dev/null | awk '{print $1}')
+        if [ -z "${remote_head}" ]; then
+            _creds=$(echo "${_b64}" | base64 -d 2>/dev/null)
+            if [ -n "${_creds}" ]; then
+                _auth_url=$(echo "${REPO_URL}" | sed "s|https://|https://${_creds}@|")
+                git remote set-url origin "${_auth_url}"
+                remote_head=$(git ls-remote origin refs/heads/${branch} 2>/dev/null | awk '{print $1}')
+            fi
         fi
+
+        # 第二步：判定模式并日志
+        if [ -z "${remote_head}" ]; then
+            echo "无法获取远程HEAD，跳过更新"
+        else
+            _current_url=$(git remote get-url origin 2>/dev/null)
+            if echo "${_current_url}" | grep -q "@"; then
+                echo "当前使用令牌模式"
+            else
+                echo "当前使用匿名模式"
+            fi
+
+            # 第三步：对比HEAD，决定是否拉取
+            local_head=$(git rev-parse HEAD 2>/dev/null)
+            if [ "${local_head}" = "${remote_head}" ]; then
+                echo "本地HEAD与远程一致（${local_head}），无需拉取"
+            else
+                echo "检测到远程更新，正在拉取..."
+                git fetch --depth 1 origin ${branch}
+                if [ $? -eq 0 ]; then
+                    git reset --hard origin/${branch}
+                    echo "主程序更新成功"
+                    
+                    # 服务脚本更新
+                    compare "/nas-tools/docker/rootfs/etc" "/etc"
+                    chmod -R +x \
+                        /etc/cont-init.d \
+                        /etc/services.d
+                    
+                    # 系统软件包更新
+                    package_update
+                    
+                    # Python依赖包更新
+                    requirements_update
+                    
+                    # third_party 更新
+                    third_party_update
+                else
+                    echo "git fetch 失败（网络未就绪或无法连接远程仓库），跳过更新"
+                fi
+            fi
+        fi
+        echo "Git HEAD: $(git rev-parse --short=7 HEAD 2>/dev/null || echo 'N/A')"
     else
         echo "程序自动升级已关闭，如需自动升级请在创建容器时设置环境变量：NASTOOL_AUTO_UPDATE=true"
     fi
