@@ -5,11 +5,7 @@ on:
     branches:
       - master
     paths:
-      - version.py
       - .github/workflows/build.yml
-      - package_list.txt
-      - requirements.txt
-      - docker/Dockerfile
 
 jobs:
   build:
@@ -21,10 +17,14 @@ jobs:
         uses: actions/checkout@master
 
       -
+        name: Clone source from Gitee
+        run: git clone --depth=1 -b master https://gitee.com/nobody114/Copy.git source
+
+      -
         name: Release version
         id: release_version
         run: |
-          app_version=$(cat version.py |sed -ne "s/APP_VERSION\s=\s'v\(.*\)'/\1/gp")
+          app_version=$(cat source/version.py | sed -ne "s/APP_VERSION\s=\s'v\(.*\)'/\1/gp")
           echo "app_version=$app_version" >> $GITHUB_ENV
 
       -
@@ -41,29 +41,17 @@ jobs:
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
-          
-      - name: Init Python 3.10.10
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10.10'
 
       -
-        name: 使用官方 PyPI 镜像
-        run: |
-          sed -i 's|pip install --upgrade pip setuptools wheel|pip install -i https://pypi.org/simple --upgrade pip setuptools wheel|g' docker/Dockerfile
-          sed -i 's|pip install cython|pip install -i https://pypi.org/simple cython|g' docker/Dockerfile
-          sed -i 's|pip install -r https://raw.githubusercontent.com/jackloves111/9/refs/heads/master/requirements.txt|pip install -i https://pypi.org/simple -r https://raw.githubusercontent.com/jackloves111/9/refs/heads/master/requirements.txt|g' docker/Dockerfile
-
-      - 
         name: Build Image
         uses: docker/build-push-action@v2
         with:
-          context: docker
-          file: docker/Dockerfile
+          context: source
+          file: source/docker/Dockerfile
           platforms: |
             linux/amd64
             linux/arm64
           push: true
           tags: |
-            ${{ secrets.DOCKER_USERNAME }}/the-movies-tool:latest
-            ${{ secrets.DOCKER_USERNAME }}/the-movies-tool:${{ env.app_version }}
+            ${{ secrets.DOCKER_USERNAME }}/nas-tools:latest
+            ${{ secrets.DOCKER_USERNAME }}/nas-tools:${{ env.app_version }}
