@@ -18,7 +18,7 @@ jobs:
 
       -
         name: Clone source from Gitee
-        run: git clone --depth=1 -b master https://juway111:${{ secrets.GITEE_TOKEN }}@gitee.com/nobody114/Copy.git source
+        run: git clone --depth=1 -b master https://juway111:${{ secrets.GITEE_TOKEN }}@gitee.com/nobody114/123.git source
 
       -
         name: Release version
