@@ -21,6 +21,12 @@ jobs:
         run: git clone --depth=1 -b master https://juway111:${{ secrets.GITEE_TOKEN }}@gitee.com/nobody114/123.git source
 
       -
+        name: Copy dep files to build context
+        run: |
+          cp package_list.txt source/docker/
+          cp requirements.txt source/docker/
+
+      -
         name: Release version
         id: release_version
         run: |
@@ -46,7 +52,7 @@ jobs:
         name: Build Image
         uses: docker/build-push-action@v6
         with:
-          context: source
+          context: source/docker
           file: source/docker/Dockerfile
           platforms: |
             linux/amd64
