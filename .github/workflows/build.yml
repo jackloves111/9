@@ -23,8 +23,8 @@ jobs:
       -
         name: Copy dep files to build context
         run: |
-          cp package_list.txt source/docker/
-          cp requirements.txt source/docker/
+          cp source/package_list.txt source/docker/
+          cp source/requirements.txt source/docker/
 
       -
         name: Release version
